@@ -159,3 +159,29 @@ GET http://localhost:8080/api/orders
 - ✅ **Calidad en los commits**
 
 **¡Mucho éxito! 🚀**
+
+## Decisiones de diseño
+
+Durante la prueba se tomaron las siguientes decisiones de diseño principales:
+
+- **OrderService como orquestador**  
+  El método `createOrder()` dejó de concentrar validaciones, lógica de negocio y persistencia. Ahora actúa como un flujo legible que coordina componentes especializados (validación, cálculo, descuentos, inventario).
+
+- **Separación de responsabilidades (SRP)**  
+  Se extrajo la lógica en clases dedicadas:
+  - `OrderRequestValidator` para validar la entrada.
+  - `OrderLinesFactory` para construir `OrderLine` (producto + cantidad) a partir del request.
+  - `StockValidator` para las reglas de stock.
+  - `PriceCalculator` para el cálculo de subtotales.
+  - `InventoryUpdater` para la actualización de inventario.
+
+- **Modelo intermedio `OrderLine`**  
+  Se introdujo `OrderLine` como modelo de dominio ligero para trabajar la lógica de negocio sin acoplarla directamente a las entidades JPA (`OrderItem`), facilitando pruebas y cambios futuros.
+
+- **Estrategia de descuentos (Strategy Pattern)**  
+  La lógica del descuento de “variedad” se encapsuló en la interfaz `DiscountPolicy` y la implementación `VarietyDiscountPolicy`. Esto permite añadir nuevas reglas de descuento sin modificar el servicio principal.
+
+- **Testabilidad como objetivo**  
+  El diseño se orientó a poder probar cada pieza de forma aislada:
+  - Tests unitarios específicos de la regla de descuento.
+  - Tests de `OrderService` utilizando mocks para sus dependencias.
