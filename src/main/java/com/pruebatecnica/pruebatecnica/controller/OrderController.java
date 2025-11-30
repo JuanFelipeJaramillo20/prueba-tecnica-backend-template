@@ -2,7 +2,7 @@ package com.pruebatecnica.pruebatecnica.controller;
 
 import com.pruebatecnica.pruebatecnica.dto.CreateOrderRequest;
 import com.pruebatecnica.pruebatecnica.model.Order;
-import com.pruebatecnica.pruebatecnica.service.OrderService;
+import com.pruebatecnica.pruebatecnica.service.order.OrderService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
