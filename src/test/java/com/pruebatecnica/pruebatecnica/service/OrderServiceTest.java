@@ -2,19 +2,27 @@ package com.pruebatecnica.pruebatecnica.service;
 
 import com.pruebatecnica.pruebatecnica.dto.CreateOrderRequest;
 import com.pruebatecnica.pruebatecnica.dto.OrderItemRequest;
-import com.pruebatecnica.pruebatecnica.model.Order;
-import com.pruebatecnica.pruebatecnica.model.Product;
+import com.pruebatecnica.pruebatecnica.model.*;
 import com.pruebatecnica.pruebatecnica.repository.OrderRepository;
 import com.pruebatecnica.pruebatecnica.repository.ProductRepository;
+import com.pruebatecnica.pruebatecnica.service.order.InventoryUpdater;
+import com.pruebatecnica.pruebatecnica.service.order.OrderLinesFactory;
+import com.pruebatecnica.pruebatecnica.service.order.OrderService;
+import com.pruebatecnica.pruebatecnica.service.order.discount.DiscountPolicy;
+import com.pruebatecnica.pruebatecnica.service.order.discount.VarietyDiscountPolicy;
+import com.pruebatecnica.pruebatecnica.service.order.pricing.PriceCalculator;
+import com.pruebatecnica.pruebatecnica.service.order.validation.OrderRequestValidator;
+import com.pruebatecnica.pruebatecnica.service.order.validation.StockValidator;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,58 +37,154 @@ class OrderServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private OrderRequestValidator orderRequestValidator;
+
+    @Mock
+    private OrderLinesFactory orderLinesFactory;
+
+    @Mock
+    private StockValidator stockValidator;
+
+    @Mock
+    private PriceCalculator priceCalculator;
+
+    @Mock
+    private InventoryUpdater inventoryUpdater;
+
+    private final DiscountPolicy discountPolicy = new VarietyDiscountPolicy();
+
     @InjectMocks
     private OrderService orderService;
 
-    /**
-     * NOTA IMPORTANTE: Estos tests están incompletos intencionalmente.
-     * Los candidatos deben:
-     * 1. Completar los tests faltantes para la lógica del descuento
-     * 2. Arreglar los tests que no funcionan debido a la refactorización
-     * 3. Agregar más casos de prueba según sea necesario
-     */
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(orderService, "discountPolicy", discountPolicy);
+    }
 
     @Test
     void testCreateOrderWithoutDiscount_ShouldNotApplyVarietyDiscount() {
-        // TODO: Los candidatos deben implementar este test
-        // Test para verificar que NO se aplica descuento cuando hay 3 o menos tipos de productos
-        fail("Test no implementado - Los candidatos deben completar este test");
+        Product p1 = new Product("Product 1", BigDecimal.valueOf(10.00), 10); p1.setId(1L);
+        Product p2 = new Product("Product 2", BigDecimal.valueOf(20.00), 10); p2.setId(2L);
+        Product p3 = new Product("Product 3", BigDecimal.valueOf(30.00), 10); p3.setId(3L);
+
+        List<OrderLine> orderLines = List.of(
+                new OrderLine(p1, 1),
+                new OrderLine(p2, 1),
+                new OrderLine(p3, 1)
+        );
+
+        OrderItemRequest item1 = new OrderItemRequest(1L, 1);
+        OrderItemRequest item2 = new OrderItemRequest(2L, 1);
+        OrderItemRequest item3 = new OrderItemRequest(3L, 1);
+
+        CreateOrderRequest request = new CreateOrderRequest(
+                "John Doe",
+                "john@test.com",
+                List.of(item1, item2, item3)
+        );
+
+        when(orderLinesFactory.fromRequest(request)).thenReturn(orderLines);
+        when(priceCalculator.calculateSubtotal(orderLines)).thenReturn(new BigDecimal("60.00"));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BigDecimal expectedTotal = new BigDecimal("60.00");
+
+        Order result = orderService.createOrder(request);
+
+        assertNotNull(result);
+        assertEquals(expectedTotal, result.getTotalAmount());
     }
 
     @Test
     void testCreateOrderWithDiscount_ShouldApplyVarietyDiscount() {
-        // TODO: Los candidatos deben implementar este test
-        // Test para verificar que SÍ se aplica descuento cuando hay más de 3 tipos de productos diferentes
-        fail("Test no implementado - Los candidatos deben completar este test");
+        Product p1 = new Product("Product 1", BigDecimal.valueOf(10.00), 10); p1.setId(1L);
+        Product p2 = new Product("Product 2", BigDecimal.valueOf(10.00), 10); p2.setId(2L);
+        Product p3 = new Product("Product 3", BigDecimal.valueOf(10.00), 10); p3.setId(3L);
+        Product p4 = new Product("Product 4", BigDecimal.valueOf(10.00), 10); p4.setId(4L);
+
+        List<OrderLine> orderLines = List.of(
+                new OrderLine(p1, 1),
+                new OrderLine(p2, 1),
+                new OrderLine(p3, 1),
+                new OrderLine(p4, 1)
+        );
+
+        OrderItemRequest item1 = new OrderItemRequest(1L, 1);
+        OrderItemRequest item2 = new OrderItemRequest(2L, 1);
+        OrderItemRequest item3 = new OrderItemRequest(3L, 1);
+        OrderItemRequest item4 = new OrderItemRequest(4L, 1);
+
+        CreateOrderRequest request = new CreateOrderRequest(
+                "John Doe",
+                "john@test.com",
+                List.of(item1, item2, item3, item4)
+        );
+
+        when(orderLinesFactory.fromRequest(request)).thenReturn(orderLines);
+        when(priceCalculator.calculateSubtotal(orderLines)).thenReturn(new BigDecimal("40.00"));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BigDecimal expectedTotal = new BigDecimal("36.00");
+
+        Order result = orderService.createOrder(request);
+
+        assertNotNull(result);
+        assertEquals(0, expectedTotal.compareTo(result.getTotalAmount()));
     }
 
     @Test
     void testCreateOrderWithSameProductMultipleTimes_ShouldNotApplyDiscount() {
-        // TODO: Los candidatos deben implementar este test
-        // Ejemplo: 10 manzanas = NO descuento (solo 1 tipo de producto)
-        fail("Test no implementado - Los candidatos deben completar este test");
+        Product p1 = new Product("Apples", BigDecimal.valueOf(10.00), 100); p1.setId(1L);
+
+        List<OrderLine> orderLines = List.of(
+                new OrderLine(p1, 10)
+        );
+
+        OrderItemRequest item = new OrderItemRequest(1L, 10);
+
+        CreateOrderRequest request = new CreateOrderRequest(
+                "John Doe",
+                "john@test.com",
+                List.of(item)
+        );
+
+        when(orderLinesFactory.fromRequest(request)).thenReturn(orderLines);
+        when(priceCalculator.calculateSubtotal(orderLines)).thenReturn(new BigDecimal("100.00"));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BigDecimal expectedTotal = new BigDecimal("100.00");
+
+        Order result = orderService.createOrder(request);
+
+        assertNotNull(result);
+        assertEquals(expectedTotal, result.getTotalAmount());
     }
 
-    // Este test básico está roto intencionalmente debido al código monolítico
     @Test
     void testCreateBasicOrder() {
-        // Arrange
-        Product product1 = new Product("Test Product", BigDecimal.valueOf(10.00), 5);
-        product1.setId(1L);
-        
-        when(productRepository.findById(1L)).thenReturn(Optional.of(product1));
-        when(orderRepository.save(any(Order.class))).thenAnswer(i -> i.getArguments()[0]);
+        Product p1 = new Product("Test Product", BigDecimal.valueOf(10.00), 5); p1.setId(1L);
+
+        List<OrderLine> orderLines = List.of(
+                new OrderLine(p1, 2)
+        );
 
         OrderItemRequest item = new OrderItemRequest(1L, 2);
-        CreateOrderRequest request = new CreateOrderRequest("John Doe", "john@test.com", List.of(item));
+        CreateOrderRequest request = new CreateOrderRequest(
+                "John Doe",
+                "john@test.com",
+                List.of(item)
+        );
 
-        // Act & Assert
-        // Este test podría fallar después de la refactorización - los candidatos deben arreglarlo
+        when(orderLinesFactory.fromRequest(request)).thenReturn(orderLines);
+        when(priceCalculator.calculateSubtotal(orderLines)).thenReturn(new BigDecimal("20.00"));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
         assertDoesNotThrow(() -> {
             Order result = orderService.createOrder(request);
             assertNotNull(result);
             assertEquals("John Doe", result.getCustomerName());
-            assertEquals(BigDecimal.valueOf(20.00), result.getTotalAmount());
+            assertEquals(new BigDecimal("20.00"), result.getTotalAmount());
         });
     }
 }
